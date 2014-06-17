@@ -1,0 +1,73 @@
+#!/bin/sh
+
+BIN_PATH=/usr/local/bin
+RUN_PATH=/var/run
+CFG_PATH=/etc/redis
+
+PORT=6379
+
+SERVER=$BIN_PATH/redis-server
+SENTINEL=--sentinel
+CLI=$BIN_PATH/redis-cli
+
+SERVER_PID_FILE=$RUN_PATH/redis_${PORT}.pid
+SENTINEL_PID_FILE=$RUN_PATH/redis.pid
+
+SERVER_CONF=$CFG_PATH/${PORT}.conf
+SENTINEL_CONF=$CFG_PATH/sentinel.conf
+
+case "$1" in
+    start)
+        if [ -f $SERVER_PID_FILE ]
+        then
+            echo "$SERVER_PID_FILE exists, process is already running or crashed"
+            exit 1
+        else
+            echo "starting redis-server..."
+            $SERVER $SERVER_CONF
+            echo "$SERVER $SERVER_CONF"
+            echo "starting redis-sentinel..."
+            $SERVER $SENTINEL_CONF $SENTINEL
+            echo "$SERVER $SENTINEL_CONF $SENTINEL"
+            $CLI FLUSHALL
+        fi
+        ;;
+    stop)
+        if [ ! -f $SERVER_PID_FILE ]
+        then
+            echo "$SERVER_PID_FILE does not exist, process is not running"
+            exit 1
+        else
+            echo "stopping redis-server..."
+            $CLI FLUSHALL
+            PID=$(cat $SERVER_PID_FILE)
+            echo "$CLI -p $PORT SHUTDOWN"
+            $CLI -p $PORT SHUTDOWN
+            while [ -x /proc/${PID} ]
+                do
+                    echo "waiting for redis-server to shutdown..."
+                    sleep 1
+                done
+            rm -f $SERVER_PID_FILE
+            echo "redis-server successfully stopped"
+            echo "stopping redis-sentinel..."
+            echo $SENTINEL_PID_FILE
+            cat $SENTINEL_PID_FILE
+            PID=$(cat $SENTINEL_PID_FILE)
+            while [ -x /proc/${PID} ]
+                do
+                    kill -9 $PID
+                    echo "waiting for redis-sentinel to shutdown..."
+                    sleep 1
+                done
+            rm -f $SENTINEL_PID_FILE
+            echo "redis-sentinel successfully stopped"
+        fi
+        ;;
+    *)
+        echo "Usage: $SERVER {start|stop}"
+        exit 1
+        ;;
+esac
+
+exit 0
